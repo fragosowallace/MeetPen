@@ -56,18 +56,18 @@ class WhisperTFLiteTranscriber(private val context: Context) {
         val interp = interpreter ?: throw Exception("Motor não inicializado")
         if (!isInitialized) throw Exception("Vocabulário não carregado")
 
+        // Nome único por chamada para evitar corrida entre transcrições concorrentes
+        val pcmFile = File.createTempFile("whisper_", ".wav", context.cacheDir)
         try {
             val voskTemp = VoskTranscriber(context)
-            val pcmFile = File(context.cacheDir, "whisper_temp.wav")
             voskTemp.decodeToWav(audioFile, pcmFile)
-            
+
             val pcmBytes = pcmFile.readBytes()
             val pcmData = FloatArray((pcmBytes.size - 44) / 2)
             val buffer = ByteBuffer.wrap(pcmBytes, 44, pcmBytes.size - 44).order(ByteOrder.LITTLE_ENDIAN)
             for (i in pcmData.indices) {
                 pcmData[i] = buffer.short / 32768.0f
             }
-            pcmFile.delete()
 
             // Padronizar tamanho de entrada (30s)
             val fixedInputSize = WhisperUtil.WHISPER_SAMPLE_RATE * WhisperUtil.WHISPER_CHUNK_SIZE
@@ -108,16 +108,15 @@ class WhisperTFLiteTranscriber(private val context: Context) {
 
             val finalResult = result.toString().trim()
             if (finalResult.isEmpty()) {
-                // Fallback para Vosk se o Whisper não retornar nada
-                return@withContext voskTemp.transcribeFileSync(audioFile, OfflineModel.VoskSmall)
+                return@withContext "Não foi possível reconhecer fala no áudio."
             }
             return@withContext finalResult
 
         } catch (e: Exception) {
             Log.e("WhisperTFLite", "Erro na transcrição: ${e.message}")
-            // Fallback em caso de erro catastrófico (ex: gather index out of bounds)
-            val voskTemp = VoskTranscriber(context)
-            return@withContext voskTemp.transcribeFileSync(audioFile, OfflineModel.VoskSmall)
+            throw e
+        } finally {
+            pcmFile.delete()
         }
     }
 }

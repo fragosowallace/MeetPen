@@ -16,7 +16,8 @@ class OpenAIApi {
         .build()
 
     fun transcribe(file: File, apiKey: String, onResult: (String) -> Unit) {
-        val mediaType = "audio/3gp".toMediaType()
+        // Coerente com o formato gravado pelo AndroidAudioRecorder (MPEG_4/AAC → .m4a)
+        val mediaType = "audio/mp4".toMediaType()
         val requestBody = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart("file", file.name, file.asRequestBody(mediaType))
@@ -38,9 +39,13 @@ class OpenAIApi {
             override fun onResponse(call: Call, response: Response) {
                 val body = response.body?.string()
                 if (response.isSuccessful && body != null) {
-                    val json = JSONObject(body)
-                    val text = json.getString("text")
-                    onResult(text)
+                    try {
+                        val json = JSONObject(body)
+                        val text = json.getString("text")
+                        onResult(text)
+                    } catch (e: Exception) {
+                        onResult("Erro no processamento da resposta")
+                    }
                 } else {
                     onResult("Erro na API: ${response.code}")
                 }

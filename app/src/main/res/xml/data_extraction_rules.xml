@@ -1,19 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+   Regras de extração de dados (API 31+).
+   Exclui os SharedPreferences do backup na nuvem e da transferência entre
+   dispositivos: chaves de API não devem sair do aparelho, e o conteúdo
+   criptografado não é restaurável sem a master key do Keystore local.
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude domain="sharedpref" path="meetpen_prefs.xml" />
+        <exclude domain="sharedpref" path="meetpen_secure_prefs.xml" />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="sharedpref" path="meetpen_prefs.xml" />
+        <exclude domain="sharedpref" path="meetpen_secure_prefs.xml" />
     </device-transfer>
-    -->
 </data-extraction-rules>

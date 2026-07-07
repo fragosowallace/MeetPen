@@ -28,7 +28,8 @@ class GeminiApi {
             val base64Audio = Base64.encodeToString(audioBytes, Base64.NO_WRAP)
             parts.put(JSONObject().apply {
                 put("inline_data", JSONObject().apply {
-                    put("mime_type", "audio/3gpp")
+                    // Coerente com o formato gravado pelo AndroidAudioRecorder (MPEG_4/AAC)
+                    put("mime_type", "audio/mp4")
                     put("data", base64Audio)
                 })
             })
@@ -55,9 +56,7 @@ class GeminiApi {
                             .getJSONArray("parts")
                             .getJSONObject(0)
                             .getString("text")
-                        
-                        Log.d("MeetPen", "Resposta RAW do Gemini: $text")
-                        
+
                         // Limpeza profunda de Markdown
                         text = text.replace("```json", "")
                                    .replace("```", "")

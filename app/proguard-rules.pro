@@ -1,21 +1,32 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# Regras ProGuard/R8 do MeetPen
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Preserva número de linha para stack traces legíveis em produção
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# ── Vosk (usa JNA/reflection nativa) ─────────────────────────────────────────
+-keep class org.vosk.** { *; }
+-keep class com.sun.jna.** { *; }
+-keepclassmembers class * extends com.sun.jna.** { *; }
+-dontwarn com.sun.jna.**
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# ── TensorFlow Lite ──────────────────────────────────────────────────────────
+-keep class org.tensorflow.** { *; }
+-dontwarn org.tensorflow.**
+
+# ── kotlinx.serialization ────────────────────────────────────────────────────
+-keepattributes *Annotation*, InnerClasses
+-dontnote kotlinx.serialization.AnnotationsKt
+-keep,includedescriptorclasses class br.com.meetpen.**$$serializer { *; }
+-keepclassmembers class br.com.meetpen.** {
+    *** Companion;
+}
+-keepclasseswithmembers class br.com.meetpen.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+
+# ── Retrofit / OkHttp / Okio ─────────────────────────────────────────────────
+-keepattributes Signature, Exceptions
+-dontwarn retrofit2.**
+-dontwarn okhttp3.**
+-dontwarn okio.**

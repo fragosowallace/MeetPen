@@ -25,7 +25,9 @@ import br.com.meetpen.ui.theme.AmberMain
 import br.com.meetpen.ui.theme.MidnightBg
 import br.com.meetpen.ui.theme.TextSecondary
 import br.com.meetpen.ui.MainViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import java.io.File
@@ -56,12 +58,25 @@ fun RecordingScreen(
         if (hasPermission && audioFile == null) {
             if (viewModel.canRecord()) {
                 val file = File(context.cacheDir, "recording_${System.currentTimeMillis()}.m4a")
-                audioFile = file
-                recorder.start(file)
+                try {
+                    // prepare()/start() do MediaRecorder são bloqueantes: fora da main thread
+                    withContext(Dispatchers.IO) { recorder.start(file) }
+                    audioFile = file
+                } catch (e: Exception) {
+                    // Microfone ocupado (ex.: gravação via widget) ou falha do gravador
+                    file.delete()
+                    onStopRecording()
+                }
             } else {
                 onStopRecording()
             }
         }
+    }
+
+    // Garante a liberação do MediaRecorder/microfone se o usuário sair da tela
+    // por qualquer caminho (botão voltar, gesto, troca de tela)
+    DisposableEffect(Unit) {
+        onDispose { recorder.stop() }
     }
 
     LaunchedEffect(hasPermission, isPaused) {

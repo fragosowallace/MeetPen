@@ -265,7 +265,6 @@ fun HomeScreen(
             isSubscribed = isSubscribed,
             recordingCount = recordingCount,
             onDismiss = { showAccountDialog = false },
-            onLogin = { viewModel.loginTest() },
             onLogout = { viewModel.logout() },
             onUpgrade = { 
                 showAccountDialog = false

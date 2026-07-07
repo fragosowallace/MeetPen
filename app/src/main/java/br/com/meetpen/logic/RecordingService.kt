@@ -18,6 +18,7 @@ import br.com.meetpen.widget.MeetPenWidget
 import br.com.meetpen.widget.MeetPenWidgetStateDefinition
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
@@ -117,19 +118,27 @@ class RecordingService : Service() {
         stopSelf()
     }
 
-    private fun setRecordingState(state: String) {
-        serviceScope.launch {
-            val manager = GlanceAppWidgetManager(this@RecordingService)
-            val ids = manager.getGlanceIds(MeetPenWidget::class.java)
-            ids.forEach { id ->
-                updateAppWidgetState(this@RecordingService, MeetPenWidgetStateDefinition, id) { prefs ->
-                    prefs.toMutablePreferences().apply {
-                        this[MeetPenWidgetStateDefinition.RECORDING_STATE_KEY] = state
-                    }
+    // suspend (em vez de launch em paralelo) garante que a atualização do widget
+    // termina antes de stopSelf()/onDestroy() cancelarem o escopo
+    private suspend fun setRecordingState(state: String) {
+        val manager = GlanceAppWidgetManager(this@RecordingService)
+        val ids = manager.getGlanceIds(MeetPenWidget::class.java)
+        ids.forEach { id ->
+            updateAppWidgetState(this@RecordingService, MeetPenWidgetStateDefinition, id) { prefs ->
+                prefs.toMutablePreferences().apply {
+                    this[MeetPenWidgetStateDefinition.RECORDING_STATE_KEY] = state
                 }
-                MeetPenWidget().update(this@RecordingService, id)
             }
+            MeetPenWidget().update(this@RecordingService, id)
         }
+    }
+
+    override fun onDestroy() {
+        // Garante que o MediaRecorder/microfone não fica retido se o serviço morrer
+        recorder?.stop()
+        recorder = null
+        serviceScope.cancel()
+        super.onDestroy()
     }
 
     private fun createNotificationChannel() {

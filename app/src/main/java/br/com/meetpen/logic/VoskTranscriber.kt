@@ -223,15 +223,6 @@ class VoskTranscriber(private val context: Context) {
         }
     }
 
-    suspend fun transcribeFileSync(audioFile: File, offlineModel: OfflineModel): String {
-        val deferred = CompletableDeferred<String>()
-        transcribeFile(audioFile, offlineModel,
-            onResult = { deferred.complete(it) },
-            onError = { deferred.complete("Erro: $it") }
-        )
-        return deferred.await()
-    }
-
     private fun resample(pcm: ByteArray, srcHz: Int, dstHz: Int): ByteArray {
         val srcFrames = pcm.size / 2
         val dstFrames = (srcFrames.toLong() * dstHz / srcHz).toInt()

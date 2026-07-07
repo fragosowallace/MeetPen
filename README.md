@@ -8,15 +8,15 @@
 
 ## ✨ Funcionalidades
 
-- **🎙️ Gravação de Áudio** — formato `.3gp` (AMR_NB) para compatibilidade e economia de espaço.
-- **🧠 Transcrição Inteligente** — integração com Google Gemini 1.5 Flash (`gemini-flash-latest`) e OpenAI Whisper, além de reconhecimento local com Vosk.
+- **🎙️ Gravação de Áudio** — formato `.m4a` (MPEG-4/AAC, 16 kHz) leve e compatível.
+- **🧠 Transcrição Inteligente** — integração com Google Gemini (`gemini-flash-latest`) e OpenAI Whisper, além de reconhecimento **offline** com Vosk e Whisper TFLite.
 - **🤖 Ações de IA**
   - **Resumo** conciso em 3 pontos.
   - **Checklist interativo** — extração de tarefas em JSON com marcar/desmarcar.
 - **▶️ Player de Áudio** — controle de velocidade (0.5x, 1.0x, 1.5x, 2.0x).
 - **🗂️ Gerenciamento de Notas** — busca em tempo real, categorias, renomeação e exclusão.
-- **🔑 Multi-Provedor** — suporte a Gemini, OpenAI e Claude com chaves independentes.
-- **🔒 Autenticação biométrica** e **widgets** (Glance).
+- **🔑 Multi-Provedor** — suporte a Gemini e OpenAI com chaves independentes, armazenadas com criptografia (`EncryptedSharedPreferences` / Android Keystore).
+- **🔒 Autenticação biométrica** e **widget de gravação** na tela inicial (Glance).
 
 ---
 
@@ -58,7 +58,7 @@
    ```
 2. Abra o projeto no Android Studio.
 3. Configure o caminho do SDK em `local.properties` (gerado automaticamente).
-4. Informe suas chaves de API (Gemini / OpenAI / Claude) nas **Configurações** do app.
+4. Informe suas chaves de API (Gemini / OpenAI) nas **Configurações** do app.
 5. Compile e execute:
    ```bash
    ./gradlew assembleDebug
@@ -69,7 +69,7 @@
 ## 📦 Informações do App
 
 - **Application ID:** `br.com.meetpen`
-- **Versão:** 1.0 (`versionCode 1`)
+- **Versão:** 1.1.0 (`versionCode 1`)
 
 ### Permissões principais
 

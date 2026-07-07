@@ -14,14 +14,6 @@ class SettingsManager(context: Context) {
         return prefs.getString("offline_model_id", "vosk_small") ?: "vosk_small"
     }
 
-    fun saveApiKey(key: String, provider: String = "openai") {
-        prefs.edit().putString("api_key_$provider", key).apply()
-    }
-
-    fun getApiKey(provider: String = "openai"): String? {
-        return prefs.getString("api_key_$provider", null)
-    }
-
     fun saveModel(model: String) {
         prefs.edit().putString("selected_model", model).apply()
     }
@@ -55,12 +47,10 @@ class SettingsManager(context: Context) {
     }
 
     fun getUsageLimit(): Int {
-        if (isSubscribed()) return Int.MAX_VALUE
-        val email = getUserEmail()
-        return if (email != null) {
-            if (email == "fragosowallace@gmail.com") 20 else 5
-        } else {
-            5
-        }
+        return if (isSubscribed()) Int.MAX_VALUE else FREE_USAGE_LIMIT
+    }
+
+    companion object {
+        const val FREE_USAGE_LIMIT = 5
     }
 }

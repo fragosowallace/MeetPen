@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import java.io.File
 
-import br.com.meetpen.logic.AndroidNativeTranscriber
+import br.com.meetpen.logic.SecurePrefs
 import br.com.meetpen.logic.SettingsManager
 import br.com.meetpen.logic.VoiceEffect
 import br.com.meetpen.logic.VoskTranscriber
@@ -29,6 +29,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val dao = db.recordingDao()
     private val settingsManager = SettingsManager(application)
     private val prefs = application.getSharedPreferences("meetpen_prefs", Context.MODE_PRIVATE)
+    private val securePrefs = SecurePrefs.get(application)
 
     val recordings: StateFlow<List<Recording>> = dao.getAllRecordings()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -44,7 +45,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val gemini = GeminiApi()
     private val openai = OpenAIApi()
     private val player = AndroidAudioPlayer(application)
-    private val nativeTranscriber = AndroidNativeTranscriber(application)
     val voskTranscriber = VoskTranscriber(application)
     private val whisperTranscriber = WhisperTFLiteTranscriber(application)
 
@@ -80,17 +80,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Baixa (se necessário) e carrega o modelo offline selecionado. */
-    fun prepareOfflineModel(model: OfflineModel) {
-        if (voskDownloadProgress.value in 0..100) return // já baixando
-        
+    /**
+     * Baixa (se necessário) e carrega o modelo offline selecionado.
+     * [onLoaded] é chamado quando o modelo estiver pronto em memória;
+     * [onFailed] quando o download/carregamento falhar.
+     */
+    fun prepareOfflineModel(
+        model: OfflineModel,
+        onLoaded: (() -> Unit)? = null,
+        onFailed: ((String) -> Unit)? = null
+    ) {
+        if (voskDownloadProgress.value in 0..100) {
+            // Já há um download em andamento
+            onFailed?.invoke("O modelo offline ainda está sendo baixado. Tente novamente em instantes.")
+            return
+        }
+
         settingsManager.saveOfflineModel(model.id)
         currentOfflineModel.value = model
-        
+
         voskDownloadProgress.value = 0
         voskError.value = null
         voskModelReady.value = false
-        
+
         if (model.type == "Vosk") {
             voskTranscriber.loadModel(
                 offlineModel = model,
@@ -98,11 +110,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 onReady = {
                     voskModelReady.value = true
                     voskDownloadProgress.value = -1
+                    onLoaded?.invoke()
                 },
                 onError = { err ->
                     voskError.value = err
                     voskDownloadProgress.value = -1
                     voskModelReady.value = false
+                    onFailed?.invoke(err)
                 }
             )
         } else {
@@ -116,10 +130,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             whisperTranscriber.loadModel(model)
                             voskModelReady.value = true
                             voskDownloadProgress.value = -1
+                            onLoaded?.invoke()
                         } catch (e: Exception) {
-                            voskError.value = "Erro ao carrergar Whisper: ${e.message}"
+                            voskError.value = "Erro ao carregar Whisper: ${e.message}"
                             voskModelReady.value = false
                             voskDownloadProgress.value = -1
+                            onFailed?.invoke("Erro ao carregar Whisper: ${e.message}")
                         }
                     }
                 },
@@ -127,6 +143,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     voskError.value = err
                     voskDownloadProgress.value = -1
                     voskModelReady.value = false
+                    onFailed?.invoke(err)
                 }
             )
         }
@@ -137,9 +154,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             dao.insert(recording.copy(transcription = "Processando..."))
 
-            // Garante que o modelo está em memória antes de transcrever
+            // Garante que o modelo está em memória antes de transcrever.
+            // Quando o carregamento terminar, a transcrição é re-disparada
+            // automaticamente (a nota não fica presa em "Processando...").
             if (!voskModelReady.value) {
-                prepareOfflineModel(currentOfflineModel.value)
+                prepareOfflineModel(
+                    model = currentOfflineModel.value,
+                    onLoaded = { transcribeOffline(recording) },
+                    onFailed = { err ->
+                        viewModelScope.launch {
+                            dao.insert(recording.copy(transcription = "Erro: $err"))
+                        }
+                    }
+                )
                 return@launch
             }
 
@@ -178,11 +205,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return recordingCount.value < settingsManager.getUsageLimit()
     }
 
-    fun loginTest() {
-        settingsManager.setUserEmail("fragosowallace@gmail.com")
-        userEmail.value = "fragosowallace@gmail.com"
-    }
-
     fun logout() {
         settingsManager.setUserEmail(null)
         userEmail.value = null
@@ -196,32 +218,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun getActiveKeyAndProvider(): Pair<String, String> {
-        val provider = prefs.getString("provider", "Gemini") ?: "Gemini"
+        // "Claude" foi removido da UI; valores antigos salvos caem no Gemini
+        val saved = prefs.getString("provider", "Gemini") ?: "Gemini"
+        val provider = if (saved == "OpenAI") "OpenAI" else "Gemini"
         val key = when (provider) {
-            "OpenAI" -> prefs.getString("openai_key", "") ?: ""
-            "Claude" -> prefs.getString("claude_key", "") ?: ""
-            else -> prefs.getString("api_key", "") ?: ""
+            "OpenAI" -> securePrefs.getString("openai_key", "") ?: ""
+            else -> securePrefs.getString("api_key", "") ?: ""
         }
         return key to provider
     }
 
-    fun saveRecording(title: String, path: String, nativeTranscription: String = "") {
-        viewModelScope.launch {
-            val transcription = when {
-                nativeTranscription.isNotBlank() ->
-                    "⚠️ Transcrição local — qualidade limitada pelo motor do Android.\n\nResultado:\n\n$nativeTranscription"
-                else -> "Áudio pronto para transcrição"
-            }
-            val newRecording = Recording(
-                title = title,
-                filePath = path,
-                timestamp = System.currentTimeMillis(),
-                transcription = transcription
-            )
-            dao.insert(newRecording)
-            updateRecordingCount()
-        }
-    }
+    private fun getGeminiKey(): String = securePrefs.getString("api_key", "") ?: ""
 
     /** Salva a gravação. Transcrição é sempre iniciada pelo usuário — nunca automática. */
     fun saveAndTranscribe(title: String, path: String) {
@@ -240,15 +247,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun hasApiKey(): Boolean {
         val (key, _) = getActiveKeyAndProvider()
         return key.isNotEmpty()
-    }
-
-    fun transcribeNative(recording: Recording) {
-        viewModelScope.launch {
-            dao.insert(recording.copy(transcription = "Processando..."))
-        }
-        nativeTranscriber.transcribeFile(java.io.File(recording.filePath)) { result ->
-            viewModelScope.launch { dao.insert(recording.copy(transcription = result)) }
-        }
     }
 
     fun setTranscriptionMode(mode: String) {
@@ -275,20 +273,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 openai.transcribe(File(recording.filePath), apiKey) { result ->
                     viewModelScope.launch { dao.insert(recording.copy(transcription = result)) }
                 }
-            } else if (provider == "Gemini") {
+            } else {
                 gemini.transcribe(File(recording.filePath), apiKey) { result ->
                     viewModelScope.launch { dao.insert(recording.copy(transcription = result)) }
                 }
-            } else {
-                dao.insert(recording.copy(transcription = "Erro: Provedor '$provider' não suportado para transcrição."))
             }
         }
     }
 
     fun generateSummary(recording: Recording) {
-        val (apiKey, _) = getActiveKeyAndProvider()
-        if (apiKey.isEmpty() || recording.transcription.isEmpty()) return
+        if (recording.transcription.isEmpty()) return
         if (noteIsProcessing(recording.summary)) return
+
+        // Resumo é gerado pelo Gemini; exige a chave do Gemini configurada
+        val apiKey = getGeminiKey()
+        if (apiKey.isEmpty()) {
+            viewModelScope.launch {
+                dao.insert(recording.copy(summary = "Erro: configure a chave do Google Gemini nas Configurações para gerar resumos."))
+            }
+            return
+        }
 
         viewModelScope.launch {
             dao.insert(recording.copy(summary = "Processando..."))
@@ -299,9 +303,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun generateTodo(recording: Recording) {
-        val (apiKey, _) = getActiveKeyAndProvider()
-        if (apiKey.isEmpty() || recording.transcription.isEmpty()) return
+        if (recording.transcription.isEmpty()) return
         if (noteIsProcessing(recording.todoList)) return
+
+        // Checklist é gerado pelo Gemini; exige a chave do Gemini configurada
+        val apiKey = getGeminiKey()
+        if (apiKey.isEmpty()) {
+            viewModelScope.launch {
+                dao.insert(recording.copy(todoList = "Erro: configure a chave do Google Gemini nas Configurações para extrair tarefas."))
+            }
+            return
+        }
 
         viewModelScope.launch {
             dao.insert(recording.copy(todoList = "Processando..."))
@@ -319,7 +331,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val item = jsonArray.getJSONObject(taskIndex)
             item.put("done", !item.getBoolean("done"))
             viewModelScope.launch { dao.insert(recording.copy(todoList = jsonArray.toString())) }
-        } catch (e: Exception) { e.printStackTrace() }
+        } catch (e: Exception) {
+            android.util.Log.e("MeetPen", "Erro ao alternar tarefa do checklist", e)
+        }
     }
 
     fun updateTitle(recording: Recording, newTitle: String) {
@@ -355,10 +369,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             val file = File(path)
             if (file.exists()) {
-                currentlyPlayingPath.value = path
-                player.playFile(file, currentSpeed.value, currentVoiceEffect.value) {
+                val started = player.playFile(file, currentSpeed.value, currentVoiceEffect.value) {
                     currentlyPlayingPath.value = null
                 }
+                // Só marca como "tocando" se o MediaPlayer foi criado com sucesso,
+                // senão a UI ficaria presa no estado de reprodução
+                currentlyPlayingPath.value = if (started) path else null
             }
         }
     }

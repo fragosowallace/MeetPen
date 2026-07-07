@@ -18,11 +18,13 @@ class AndroidAudioPlayer(private val context: Context) {
     private var player: MediaPlayer? = null
     private var currentEffect: VoiceEffect = VoiceEffect.NONE
 
-    fun playFile(file: File, speed: Float = 1.0f, effect: VoiceEffect = VoiceEffect.NONE, onFinished: () -> Unit) {
+    /** @return true se a reprodução foi iniciada; false se o MediaPlayer não pôde ser criado. */
+    fun playFile(file: File, speed: Float = 1.0f, effect: VoiceEffect = VoiceEffect.NONE, onFinished: () -> Unit): Boolean {
         stop()
         currentEffect = effect
-        
-        MediaPlayer.create(context, android.net.Uri.fromFile(file))?.apply {
+
+        val created = MediaPlayer.create(context, android.net.Uri.fromFile(file)) ?: return false
+        created.apply {
             player = this
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 // Combina a velocidade do usuário com a do efeito
@@ -31,12 +33,13 @@ class AndroidAudioPlayer(private val context: Context) {
                     .setPitch(effect.pitch)
                     .setSpeed(finalSpeed)
             }
-            setOnCompletionListener { 
+            setOnCompletionListener {
                 onFinished()
                 stop()
             }
             start()
         }
+        return true
     }
 
     fun stop() {

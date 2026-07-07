@@ -32,10 +32,10 @@ fun AccountDialog(
     isSubscribed: Boolean,
     recordingCount: Int,
     onDismiss: () -> Unit,
-    onLogin: () -> Unit,
     onLogout: () -> Unit,
     onUpgrade: () -> Unit
 ) {
+    val freeLimit = br.com.meetpen.logic.SettingsManager.FREE_USAGE_LIMIT
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
@@ -144,20 +144,14 @@ fun AccountDialog(
                             }
                         }
                     } else {
-                        Button(
-                            onClick = onLogin,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(52.dp),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = AmberMain)
-                        ) {
-                            Text(
-                                "Entrar com Google",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp
-                            )
-                        }
+                        // Login com Google ainda não implementado
+                        Text(
+                            text = "Login com Google em breve",
+                            color = Color.White.copy(alpha = 0.35f),
+                            fontSize = 13.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
 
@@ -202,9 +196,8 @@ fun AccountDialog(
                                             lineHeight = 22.sp
                                         )
                                         Spacer(modifier = Modifier.height(8.dp))
-                                        val limit = if (userEmail == "fragosowallace@gmail.com") "20" else "5"
                                         Text(
-                                            text = "Gravações ilimitadas, resumos com IA, efeitos de voz e muito mais.\n\nVocê já usou $recordingCount de $limit gravações disponíveis.",
+                                            text = "Gravações ilimitadas, resumos com IA, efeitos de voz e muito mais.\n\nVocê já usou $recordingCount de $freeLimit gravações disponíveis.",
                                             color = Color.White.copy(alpha = 0.55f),
                                             fontSize = 14.sp,
                                             lineHeight = 21.sp
@@ -286,11 +279,7 @@ fun AccountDialog(
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.Medium
                                     )
-                                    val limit = when {
-                                        isSubscribed -> "ilimitado"
-                                        userEmail == "fragosowallace@gmail.com" -> "limite: 20"
-                                        else -> "limite: 5"
-                                    }
+                                    val limit = if (isSubscribed) "ilimitado" else "limite: $freeLimit"
                                     Text(
                                         text = limit,
                                         color = Color.White.copy(alpha = 0.45f),
@@ -303,8 +292,7 @@ fun AccountDialog(
 
                     if (!isSubscribed) {
                         Spacer(modifier = Modifier.height(12.dp))
-                        val maxCount = if (userEmail == "fragosowallace@gmail.com") 20f else 5f
-                        val progress = (recordingCount.toFloat() / maxCount).coerceIn(0f, 1f)
+                        val progress = (recordingCount.toFloat() / freeLimit).coerceIn(0f, 1f)
                         LinearProgressIndicator(
                             progress = { progress },
                             modifier = Modifier
@@ -316,7 +304,7 @@ fun AccountDialog(
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "$recordingCount de ${if (userEmail == "fragosowallace@gmail.com") 20 else 5} usadas",
+                            text = "$recordingCount de $freeLimit usadas",
                             color = Color.White.copy(alpha = 0.4f),
                             fontSize = 12.sp
                         )
@@ -368,7 +356,7 @@ fun AccountDialog(
                 }
 
                 Text(
-                    text = "Meet Pen v1.1.0",
+                    text = "Meet Pen v${br.com.meetpen.BuildConfig.VERSION_NAME}",
                     color = Color.White.copy(alpha = 0.15f),
                     fontSize = 11.sp,
                     modifier = Modifier

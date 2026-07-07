@@ -41,6 +41,7 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     val context = LocalContext.current
     val activity = context as? FragmentActivity
     val prefs = remember { context.getSharedPreferences("meetpen_prefs", Context.MODE_PRIVATE) }
+    val securePrefs = remember { br.com.meetpen.logic.SecurePrefs.get(context) }
     val biometricAuthenticator = remember { BiometricAuthenticator(context) }
 
     var isAuthorized by remember { mutableStateOf(!prefs.getBoolean("biometric_enabled", false)) }
@@ -95,16 +96,18 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     }
 
     // ── Estado dos campos ──────────────────────────────────────────────────
-    var selectedProvider by remember { mutableStateOf(prefs.getString("provider", "Gemini") ?: "Gemini") }
-    var geminiKey by remember { mutableStateOf(prefs.getString("api_key", "") ?: "") }
-    var openaiKey by remember { mutableStateOf(prefs.getString("openai_key", "") ?: "") }
-    var claudeKey by remember { mutableStateOf(prefs.getString("claude_key", "") ?: "") }
+    // "Claude" foi removido enquanto não há suporte; valores antigos caem no Gemini
+    var selectedProvider by remember {
+        val saved = prefs.getString("provider", "Gemini") ?: "Gemini"
+        mutableStateOf(if (saved == "OpenAI") "OpenAI" else "Gemini")
+    }
+    var geminiKey by remember { mutableStateOf(securePrefs.getString("api_key", "") ?: "") }
+    var openaiKey by remember { mutableStateOf(securePrefs.getString("openai_key", "") ?: "") }
     var biometricEnabled by remember { mutableStateOf(prefs.getBoolean("biometric_enabled", false)) }
     val currentMode by viewModel.transcriptionMode
 
     val activeKey = when (selectedProvider) {
         "OpenAI" -> openaiKey
-        "Claude" -> claudeKey
         else -> geminiKey
     }
     val hasActiveKey = activeKey.isNotBlank()
@@ -397,7 +400,7 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                listOf("Gemini", "OpenAI", "Claude").forEach { provider ->
+                listOf("Gemini", "OpenAI").forEach { provider ->
                     val isSelected = selectedProvider == provider
                     Surface(
                         modifier = Modifier
@@ -435,7 +438,7 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                     value = geminiKey,
                     onValueChange = {
                         geminiKey = it
-                        prefs.edit().putString("api_key", it).apply()
+                        securePrefs.edit().putString("api_key", it).apply()
                     }
                 )
                 "OpenAI" -> ApiKeyField(
@@ -444,16 +447,7 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                     value = openaiKey,
                     onValueChange = {
                         openaiKey = it
-                        prefs.edit().putString("openai_key", it).apply()
-                    }
-                )
-                "Claude" -> ApiKeyField(
-                    label = "Chave da Anthropic (Claude)",
-                    hint = "sk-ant-...",
-                    value = claudeKey,
-                    onValueChange = {
-                        claudeKey = it
-                        prefs.edit().putString("claude_key", it).apply()
+                        securePrefs.edit().putString("openai_key", it).apply()
                     }
                 )
             }
@@ -462,7 +456,6 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             Spacer(Modifier.height(10.dp))
             val docsUrl = when (selectedProvider) {
                 "OpenAI" -> "platform.openai.com/api-keys"
-                "Claude" -> "console.anthropic.com"
                 else -> "aistudio.google.com"
             }
             Text(
@@ -569,7 +562,7 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
 
             Spacer(Modifier.height(40.dp))
             Text(
-                "Meet Pen v1.1.0",
+                "Meet Pen v${br.com.meetpen.BuildConfig.VERSION_NAME}",
                 color = Color.White.copy(alpha = 0.15f),
                 fontSize = 11.sp,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -675,40 +668,3 @@ private fun ApiKeyField(
     }
 }
 
-// Mantidos para compatibilidade com outros locais do código
-@Composable
-fun ProviderChip(name: String, isSelected: Boolean, onClick: () -> Unit) {
-    Surface(
-        modifier = Modifier.clickable { onClick() }.height(40.dp),
-        shape = RoundedCornerShape(20.dp),
-        color = if (isSelected) AmberMain else Color.White.copy(alpha = 0.05f),
-        border = if (isSelected) null else androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
-    ) {
-        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 20.dp)) {
-            Text(text = name, color = if (isSelected) MidnightBg else Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-        }
-    }
-}
-
-@Composable
-fun SettingsField(label: String, value: String, onValueChange: (String) -> Unit, icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    Column {
-        Text(label, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
-            leadingIcon = { Icon(icon, contentDescription = null, tint = AmberMain, modifier = Modifier.size(20.dp)) },
-            shape = RoundedCornerShape(16.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White,
-                focusedContainerColor = Color.White.copy(alpha = 0.02f),
-                unfocusedContainerColor = Color.Transparent,
-                focusedBorderColor = AmberMain,
-                unfocusedBorderColor = Color.White.copy(alpha = 0.1f)
-            ),
-            singleLine = true
-        )
-    }
-}

@@ -1,6 +1,8 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?><!--
+    Somente o cache é exposto via FileProvider: é onde ficam os áudios
+    compartilhados pelo app. files-path e external-path foram removidos
+    por não serem usados (evita conceder acesso além do necessário).
+-->
 <paths>
     <cache-path name="my_cache" path="." />
-    <files-path name="my_files" path="." />
-    <external-path name="my_external" path="." />
 </paths>
